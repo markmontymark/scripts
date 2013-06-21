@@ -16,9 +16,9 @@ my $do_save = 0;
 my $valgrind = File::Which::which('valgrind');
 my $cfg = JSON::XS::decode_json( File::Slurp::read_file($test_cfg_file));
 
-walk( $test_dir, \&run_tests );
+&walk( $test_dir, \&run_tests );
 done_testing();
-#&save_cfg($cfg,$test_cfg_file) if $do_save;
+&save_cfg($cfg,$test_cfg_file) if $do_save;
 exit;
 
 
@@ -165,7 +165,7 @@ sub walk
 	}
 	closedir D;
 	$callback->($_) for sort @bins;
-	&walk($callback,$_) for sort @dirs;
+	&walk($_,$callback) for sort @dirs;
 }
 
 sub save_cfg
