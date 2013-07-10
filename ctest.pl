@@ -8,12 +8,19 @@ use File::Which;
 use File::Find;
 use JSON::XS;
 use File::Slurp;
+use Getopt::Long;
 
 my $test_cfg_file = shift;
 my $test_dir = shift;
 my $do_save = 0;
 
 my $valgrind = File::Which::which('valgrind');
+my $do_valgrind = 0;
+
+GetOptions(
+	'valgrind' => \$do_valgrind
+);
+
 my $cfg = JSON::XS::decode_json( File::Slurp::read_file($test_cfg_file));
 
 &walk( $test_dir, \&run_tests );
@@ -62,6 +69,7 @@ sub run_tests_on_cfg
 	my $cmdline = $path;
 	$cmdline .= " $test_args" if defined $test_args;
 	&basic_test($cmdline,$test_cfg);
+	&valgrind_test($cmdline,$test_cfg) if $do_valgrind;
 }
 
 sub basic_test
@@ -96,15 +104,8 @@ sub valgrind_test
 	return unless defined $valgrind;
 	return unless exists $test_cfg->{expected} or exists $test_cfg->{regex_expected};
 	my $test_name = $test_cfg->{name} . ' Valgrind';
-	my $got = &trim(join '',`$valgrind --leak-check=full $cmdline`);
-	if(exists $test_cfg->{regex_expected})
-	{
-		like($got, $test_cfg->{regex_expected} , $test_name);
-	}
-	else
-	{
-		is($got, &trim($test_cfg->{expected}) , $test_name);
-	}
+	my $got = &trim(join '',`$valgrind --leak-check=full $cmdline 2>&1`);
+	like( $got , '/All heap blocks were freed -- no leaks are possible/is', $test_name );
 }
 
 sub complain_about_unescaped_regex_modifiers
