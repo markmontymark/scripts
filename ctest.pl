@@ -8,17 +8,25 @@ use File::Which;
 use File::Find;
 use JSON::XS;
 use File::Slurp;
+use Getopt::Long;
+use Algorithm::Diff;
 
 my $test_cfg_file = shift;
 my $test_dir = shift;
 my $do_save = 0;
 
 my $valgrind = File::Which::which('valgrind');
+my $do_valgrind = 0;
+
+GetOptions(
+	'valgrind' => \$do_valgrind
+);
+
 my $cfg = JSON::XS::decode_json( File::Slurp::read_file($test_cfg_file));
 
-walk( $test_dir, \&run_tests );
+&walk( $test_dir, \&run_tests );
 done_testing();
-#&save_cfg($cfg,$test_cfg_file) if $do_save;
+&save_cfg($cfg,$test_cfg_file) if $do_save;
 exit;
 
 
@@ -62,6 +70,7 @@ sub run_tests_on_cfg
 	my $cmdline = $path;
 	$cmdline .= " $test_args" if defined $test_args;
 	&basic_test($cmdline,$test_cfg);
+	&valgrind_test($cmdline,$test_cfg) if $do_valgrind;
 }
 
 sub basic_test
@@ -69,7 +78,8 @@ sub basic_test
 	my($cmdline, $test_cfg) = @_;
 	return unless exists $test_cfg->{expected} or exists $test_cfg->{regex_expected};
 	my $test_name = $test_cfg->{name};
-	my $got = &trim(join '',`$cmdline`);
+	my @ogot =  `$cmdline`;
+	my $got = &trim(join '',@ogot);
 	if(exists $test_cfg->{regex_expected})
 	{
 		&complain_about_unescaped_regex_modifiers($test_name,$test_cfg->{regex_expected});
@@ -86,6 +96,10 @@ sub basic_test
       else
       {
          is($got, &trim($test_cfg->{expected}) , $test_name);
+			if( $got ne &trim($test_cfg->{expected}))
+			{
+				print "do_diff\n",&do_diff(\@ogot, [(map{"$_\n"}(split "\n",$test_cfg->{expected}))]),"\n\n";
+			}
       }
 	}
 }
@@ -95,16 +109,9 @@ sub valgrind_test
 	my($cmdline, $test_cfg) = @_;
 	return unless defined $valgrind;
 	return unless exists $test_cfg->{expected} or exists $test_cfg->{regex_expected};
-	my $test_name = $test_cfg->{name} . ' Valgrind';
-	my $got = &trim(join '',`$valgrind --leak-check=full $cmdline`);
-	if(exists $test_cfg->{regex_expected})
-	{
-		like($got, $test_cfg->{regex_expected} , $test_name);
-	}
-	else
-	{
-		is($got, &trim($test_cfg->{expected}) , $test_name);
-	}
+	my $test_name = $test_cfg->{name} . ' Valgrind clean';
+	my $got = &trim(join '',`$valgrind --leak-check=full $cmdline 2>&1`);
+	like( $got , '/All heap blocks were freed -- no leaks are possible/is', $test_name );
 }
 
 sub complain_about_unescaped_regex_modifiers
@@ -165,7 +172,7 @@ sub walk
 	}
 	closedir D;
 	$callback->($_) for sort @bins;
-	&walk($callback,$_) for sort @dirs;
+	&walk($_,$callback) for sort @dirs;
 }
 
 sub save_cfg
@@ -173,6 +180,35 @@ sub save_cfg
    my($cfg,$path) = @_;
    my $coder = JSON::XS->new->ascii->pretty->allow_nonref;
    File::Slurp::write_file($path,$coder->encode($cfg));
+}
+
+sub do_diff
+{
+	my($seq1,$seq2) = @_;
+	my $diff = Algorithm::Diff->new( $seq1, $seq2 );
+	$diff->Base( 1 );   # Return line numbers, not indices
+	my @retval;
+	while(  $diff->Next()  ) {
+		next   if  $diff->Same();
+		my $sep = '';
+		if(  ! $diff->Items(2)  ) 
+		{
+			push @retval,sprintf("%d,%dd%d\n", $diff->Get(qw( Min1 Max1 Max2 )));
+		} 
+		elsif(  ! $diff->Items(1)  ) 
+		{
+			push @retval,sprintf("%da%d,%d\n", $diff->Get(qw( Max1 Min2 Max2 )));
+		} 
+		else 
+		{
+			$sep = "---\n";
+			push @retval,sprintf("%d,%dc%d,%d\n", $diff->Get(qw( Min1 Max1 Min2 Max2 )));
+		}
+		push(@retval,"< $_")   for  $diff->Items(1);
+		push(@retval, $sep);
+		push(@retval,"> $_")   for  $diff->Items(2);
+	}
+	join '',@retval
 }
 
 
