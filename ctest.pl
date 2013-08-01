@@ -96,10 +96,8 @@ sub basic_test
       else
       {
          is($got, &trim($test_cfg->{expected}) , $test_name);
-			if( $got ne &trim($test_cfg->{expected}))
-			{
-				print "do_diff\n",&do_diff(\@ogot, [(map{"$_\n"}(split "\n",$test_cfg->{expected}))]),"\n\n";
-			}
+			print "Diff of actual(<) vs expected(>) results \n",&do_diff(\@ogot, [(map{"$_\n"}(split "\n",$test_cfg->{expected}))]),"\n\n"
+				if $got ne &trim($test_cfg->{expected});
       }
 	}
 }
