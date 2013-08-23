@@ -128,3 +128,14 @@ echo "Going to attempt to set perlbrew to version $STABLEPERL"
 perlbrew switch $STABLEPERL
 source ~/perl5/perlbrew/etc/bashrc
 perl -v 
+
+## Install Go
+install_w_sudo_apt_get golang-go
+
+## Install Perl6 (rakudo, which also installs panda) and some helpful Perl6 modules
+install_w_sudo_apt_get rakudo
+panda install Test
+
+git clone https://github.com:masak/ufo
+mkdir -p $HOME/.perl6/
+cp -pr ufo/bin/ufo $HOME/.perl6/*/bin/
