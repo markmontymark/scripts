@@ -76,7 +76,7 @@ fi
 #node\.io scripts/git-clone-all.coffee < urls.txt
 ##
 ##
-echo "OK, easy tiger, lots of git clone is going on now, ps -efa | grep git clone"
+echo "lots of git clone is going on now, ps -efa | grep git clone"
 echo "Wait till that's done"
 
 
